@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:layoutr/common_layout.dart';
 import 'package:memo/application/constants/dimensions.dart' as dimens;
 import 'package:memo/application/constants/images.dart' as images;
@@ -10,7 +10,7 @@ import 'package:memo/core/faults/exceptions/url_exception.dart';
 import 'package:url_launcher/url_launcher.dart' as url_launcher;
 
 /// Decorates a text link, themed like a button, with custom layout specs.
-class LinkButton extends HookWidget {
+class LinkButton extends ConsumerWidget {
   const LinkButton({
     required this.onTap,
     required this.text,
@@ -37,7 +37,7 @@ class LinkButton extends HookWidget {
   final TextStyle? textStyle;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final linkContents = Row(
       children: [
         if (leading != null) ...[
@@ -59,7 +59,7 @@ class LinkButton extends HookWidget {
       ],
     );
 
-    final themeColor = useTheme().neutralSwatch.shade800;
+    final themeColor = ref.watch(themeController).neutralSwatch.shade800;
 
     return Semantics(
       button: true,
@@ -102,10 +102,14 @@ class UrlLinkButton extends StatelessWidget {
     this.textStyle,
     Key? key,
   }) : super(key: key) {
-    _allowedSchemes.firstWhere((scheme) => url.toLowerCase().startsWith(scheme), orElse: () {
-      throw InconsistentStateError.layout(
-          'All links must start with one of the following schemes: $_allowedSchemes - actual: "$url"');
-    });
+    _allowedSchemes.firstWhere(
+      (scheme) => url.toLowerCase().startsWith(scheme),
+      orElse: () {
+        throw InconsistentStateError.layout(
+          'All links must start with one of the following schemes: $_allowedSchemes - actual: "$url"',
+        );
+      },
+    );
   }
 
   final String url;
@@ -146,7 +150,7 @@ class UrlLinkButton extends StatelessWidget {
 ///
 /// Pressing this widget will open the [url] using the respective platform's browser, when [isEnabled] is set to `true`
 /// (default).
-class UnderlinedUrlLink extends HookWidget {
+class UnderlinedUrlLink extends ConsumerWidget {
   UnderlinedUrlLink(
     this.url, {
     this.isEnabled = true,
@@ -154,10 +158,14 @@ class UnderlinedUrlLink extends HookWidget {
     this.onFailLaunchingUrl,
     Key? key,
   }) : super(key: key) {
-    _allowedSchemes.firstWhere((scheme) => url.toLowerCase().startsWith(scheme), orElse: () {
-      throw InconsistentStateError.layout(
-          'All links must start with one of the following schemes: $_allowedSchemes - actual: "$url"');
-    });
+    _allowedSchemes.firstWhere(
+      (scheme) => url.toLowerCase().startsWith(scheme),
+      orElse: () {
+        throw InconsistentStateError.layout(
+          'All links must start with one of the following schemes: $_allowedSchemes - actual: "$url"',
+        );
+      },
+    );
   }
 
   final String url;
@@ -170,7 +178,7 @@ class UnderlinedUrlLink extends HookWidget {
   final void Function(UrlException exception)? onFailLaunchingUrl;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Semantics(
       button: true,
       enabled: isEnabled,
@@ -178,10 +186,10 @@ class UnderlinedUrlLink extends HookWidget {
         onTap: isEnabled ? () => _handleUrlLaunch(url, onFailLaunchingUrl) : null,
         child: Text(
           text ?? url,
-          style: Theme.of(context)
-              .textTheme
-              .caption
-              ?.copyWith(color: useTheme().neutralSwatch.shade300, decoration: TextDecoration.underline),
+          style: Theme.of(context).textTheme.caption?.copyWith(
+                color: ref.watch(themeController).neutralSwatch.shade300,
+                decoration: TextDecoration.underline,
+              ),
         ),
       ),
     );

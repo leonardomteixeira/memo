@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:layoutr/common_layout.dart';
 import 'package:memo/application/constants/strings.dart' as strings;
@@ -8,16 +7,17 @@ import 'package:memo/application/pages/details/contributor_view.dart';
 import 'package:memo/application/pages/details/details_providers.dart';
 import 'package:memo/application/theme/theme_controller.dart';
 import 'package:memo/application/view-models/details/collection_details_vm.dart';
+import 'package:memo/application/widgets/theme/custom_button.dart';
 import 'package:memo/application/widgets/theme/item_collection_card.dart';
 import 'package:memo/application/widgets/theme/resources_list.dart';
 import 'package:memo/application/widgets/theme/themed_container.dart';
 import 'package:memo/application/widgets/theme/themed_text_tag.dart';
 
-class CollectionDetailsPage extends HookWidget {
+class CollectionDetailsPage extends ConsumerWidget {
   @override
-  Widget build(BuildContext context) {
-    final memoTheme = useTheme();
-    final state = useCollectionDetailsState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final memoTheme = ref.watch(themeController);
+    final state = watchCollectionDetailsState(ref);
 
     if (state is LoadedCollectionDetailsState) {
       final sections = <Widget>[];
@@ -42,7 +42,7 @@ class CollectionDetailsPage extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle(context, strings.detailsDescription),
+          _buildSectionTitle(context, ref, strings.detailsDescription),
           context.verticalBox(Spacing.small),
           Text(state.description),
           context.verticalBox(Spacing.small),
@@ -62,7 +62,7 @@ class CollectionDetailsPage extends HookWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          _buildSectionTitle(context, strings.detailsResources),
+          _buildSectionTitle(context, ref, strings.detailsResources),
           context.verticalBox(Spacing.small),
           Text(
             strings.detailsResourcesWarning,
@@ -84,12 +84,12 @@ class CollectionDetailsPage extends HookWidget {
         child: Container(
           color: memoTheme.neutralSwatch.shade800,
           child: SafeArea(
-            child: ElevatedButton(
+            child: PrimaryElevatedButton(
               onPressed: () {
-                final id = context.read(detailsCollectionId);
-                readCoordinator(context).navigateToCollectionExecution(id, isNestedNavigation: false);
+                final id = ref.read(detailsCollectionId);
+                readCoordinator(ref).navigateToCollectionExecution(id, isNestedNavigation: false);
               },
-              child: Text(strings.detailsStudyNow.toUpperCase()),
+              text: strings.detailsStudyNow.toUpperCase(),
             ).withSymmetricalPadding(context, vertical: Spacing.small, horizontal: Spacing.medium),
           ),
         ),
@@ -125,6 +125,9 @@ class CollectionDetailsPage extends HookWidget {
     return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 
-  Widget _buildSectionTitle(BuildContext context, String text) =>
-      Text(text, style: Theme.of(context).textTheme.subtitle1?.copyWith(color: useTheme().neutralSwatch.shade300));
+  Widget _buildSectionTitle(BuildContext context, WidgetRef ref, String text) => Text(
+        text,
+        style:
+            Theme.of(context).textTheme.subtitle1?.copyWith(color: ref.watch(themeController).neutralSwatch.shade300),
+      );
 }

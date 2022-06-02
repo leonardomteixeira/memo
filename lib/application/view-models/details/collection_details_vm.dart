@@ -10,7 +10,7 @@ import 'package:memo/domain/services/collection_services.dart';
 import 'package:memo/domain/services/resource_services.dart';
 import 'package:memo/domain/transients/collection_status.dart';
 
-final collectionDetailsVM = StateNotifierProvider.family<CollectionDetailsVM, String>(
+final collectionDetailsVM = StateNotifierProvider.family<CollectionDetailsVM, CollectionDetailsState, String>(
   (ref, collectionId) => CollectionDetailsVMImpl(
     collectionId: collectionId,
     collectionServices: ref.read(collectionServices),
@@ -23,9 +23,11 @@ abstract class CollectionDetailsVM extends StateNotifier<CollectionDetailsState>
 }
 
 class CollectionDetailsVMImpl extends CollectionDetailsVM {
-  CollectionDetailsVMImpl(
-      {required this.collectionId, required this.collectionServices, required this.resourceServices})
-      : super(LoadingCollectionDetailsState()) {
+  CollectionDetailsVMImpl({
+    required this.collectionId,
+    required this.collectionServices,
+    required this.resourceServices,
+  }) : super(LoadingCollectionDetailsState()) {
     _loadCollection();
   }
 

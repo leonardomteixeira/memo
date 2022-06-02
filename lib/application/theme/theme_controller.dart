@@ -7,7 +7,7 @@ import 'package:memo/application/theme/material_theme_data.dart' as material_the
 import 'package:memo/application/theme/memo_theme_colors.dart' as colors;
 import 'package:memo/application/theme/memo_theme_data.dart';
 
-final themeController = StateNotifierProvider<ThemeController>((_) => ThemeController());
+final themeController = StateNotifierProvider<ThemeController, MemoThemeData>((_) => ThemeController());
 
 /// Controls theme-related operations.
 ///
@@ -64,6 +64,7 @@ class ThemeController extends StateNotifier<MemoThemeData> {
     }
 
     final tabBarLabelPadding = context.symmetricInsets(vertical: Spacing.small);
+    final textFieldPadding = context.symmetricInsets(horizontal: Spacing.small, vertical: Spacing.xSmall);
 
     return material_theme.buildThemeData(
       // Theme material-related values
@@ -76,21 +77,17 @@ class ThemeController extends StateNotifier<MemoThemeData> {
       primarySwatch: state.primarySwatch,
       secondarySwatch: state.secondarySwatch,
       neutralSwatch: state.neutralSwatch,
+      destructiveSwatch: state.destructiveSwatch,
       // Dimensions values
       roundedRectElementsRadius: dimens.genericRoundedElementBorderRadius,
       minButtonHeight: dimens.minButtonHeight,
       iconSize: dimens.iconSize,
       // Spacings values
       tabBarLabelPadding: tabBarLabelPadding,
+      textFieldPadding: textFieldPadding,
     );
   }
 }
-
-/// Syntax sugar for _hooking_ the [themeController] state instance in a hook widget build.
-MemoThemeData useTheme() => useProvider(themeController.state);
-
-/// Syntax sugar for _hooking_ the [themeController] provider instance in a hook widget build.
-ThemeController useThemeController() => useProvider(themeController);
 
 MaterialColor _primarySwatchFor(MemoTheme theme) {
   switch (theme) {

@@ -9,7 +9,8 @@ import 'package:memo/domain/models/memo_execution.dart';
 import 'package:memo/domain/services/collection_services.dart';
 import 'package:memo/domain/services/execution_services.dart';
 
-final collectionExecutionVM = StateNotifierProvider.autoDispose.family<CollectionExecutionVM, String>(
+final collectionExecutionVM =
+    StateNotifierProvider.autoDispose.family<CollectionExecutionVM, CollectionExecutionState, String>(
   (ref, collectionId) => CollectionExecutionVMImpl(
     executionServices: ref.read(executionServices),
     collectionServices: ref.read(collectionServices),
@@ -99,6 +100,8 @@ class CollectionExecutionVMImpl extends CollectionExecutionVM {
           totalUniqueMemos: updatedCollection.uniqueMemosAmount,
         );
       }
+
+      return null;
     } else {
       // Otherwise we proceed with the next available memo and start counting a new start date.
       final completionValue = _executions.length / _memos.length;
@@ -148,8 +151,11 @@ abstract class CollectionExecutionState extends Equatable {
 class LoadingCollectionExecutionState extends CollectionExecutionState {}
 
 class LoadedCollectionExecutionState extends CollectionExecutionState {
-  LoadedCollectionExecutionState(
-      {required this.initialMemo, required this.completionValue, required this.collectionName});
+  LoadedCollectionExecutionState({
+    required this.initialMemo,
+    required this.completionValue,
+    required this.collectionName,
+  });
 
   final String collectionName;
   final MemoMetadata initialMemo;

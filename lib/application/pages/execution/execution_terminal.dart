@@ -2,15 +2,17 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_hooks/flutter_hooks.dart';
-import 'package:flutter_quill/models/documents/document.dart' as quill_doc;
-import 'package:flutter_quill/widgets/controller.dart';
-import 'package:flutter_quill/widgets/editor.dart';
+import 'package:flutter_quill/flutter_quill.dart' as quill;
+import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:layoutr/common_layout.dart';
 import 'package:memo/application/constants/animations.dart' as anims;
 import 'package:memo/application/constants/dimensions.dart' as dimens;
+import 'package:memo/application/constants/images.dart' as images;
 import 'package:memo/application/constants/strings.dart' as strings;
 import 'package:memo/application/theme/theme_controller.dart';
 import 'package:memo/application/view-models/execution/collection_execution_vm.dart';
+import 'package:memo/application/widgets/theme/custom_button.dart';
+import 'package:memo/application/widgets/theme/terminal_window.dart';
 import 'package:memo/domain/enums/memo_difficulty.dart';
 
 /// Coordinates the state (and animations) of a [ExecutionTerminal] widget.
@@ -124,8 +126,11 @@ class TerminalController extends ChangeNotifier {
       // Reverse the editor animation (to fade out its contents).
       editorAnimationController.reverse(),
       // ... and make sure that the editor scroll goes to the top.
-      editorScrollController.animateTo(0,
-          duration: anims.terminalAnimationDuration, curve: anims.defaultAnimationCurve),
+      editorScrollController.animateTo(
+        0,
+        duration: anims.terminalAnimationDuration,
+        curve: anims.defaultAnimationCurve,
+      ),
       // Respectively hide/show the actions depending on the `isDisplayingQuestion`.
       if (isDisplayingQuestion) actionsAnimationController.forward() else actionsAnimationController.reverse(),
     ]);
@@ -156,23 +161,23 @@ class TerminalController extends ChangeNotifier {
 /// widget.
 ///
 /// The naming comes from its layout resemblance of most terminal applications.
-class ExecutionTerminal extends StatefulHookWidget {
+class ExecutionTerminal extends StatefulHookConsumerWidget {
   const ExecutionTerminal({required this.controller, Key? key}) : super(key: key);
 
   final TerminalController controller;
 
   @override
-  State<StatefulWidget> createState() => _ExecutionTerminalState();
+  ConsumerState createState() => _ExecutionTerminalState();
 }
 
-class _ExecutionTerminalState extends State<ExecutionTerminal> {
+class _ExecutionTerminalState extends ConsumerState<ExecutionTerminal> {
   TerminalController get controller => widget.controller;
 
   @override
   Widget build(BuildContext context) {
     useListenable(controller);
 
-    final theme = useTheme();
+    final theme = ref.watch(themeController);
     final borderColor = theme.neutralSwatch.shade700;
     final fadeGradient = [theme.neutralSwatch.shade900, theme.neutralSwatch.shade900.withOpacity(0)];
 
@@ -180,22 +185,18 @@ class _ExecutionTerminalState extends State<ExecutionTerminal> {
     final highlightColor = theme.secondarySwatch.shade400;
 
     // Build all widgets for `_TerminalContentsLayout`
-
-    final header = _TerminalHeader(fadeGradient: fadeGradient, borderColor: borderColor);
-
-    final editor = _TerminalQuillEditor(
-      document: quill_doc.Document.fromJson(controller.rawContents),
-      animationController: controller.editorAnimationController,
-      scrollController: controller.editorScrollController,
-    );
-    // Bottom fade transition that resembles the `editor` end.
     final bottomFadeTransition = IgnorePointer(
       child: Container(
-        height: dimens.executionsTerminalFadeHeight,
+        height: dimens.terminalWindowHeaderHeight,
         decoration: BoxDecoration(
           gradient: LinearGradient(begin: Alignment.bottomCenter, end: Alignment.topCenter, colors: fadeGradient),
         ),
       ),
+    );
+    final editor = _TerminalQuillEditor(
+      document: quill.Document.fromJson(controller.rawContents),
+      animationController: controller.editorAnimationController,
+      scrollController: controller.editorScrollController,
     );
     final actions = _TerminalActions(
       markedAnswer: controller.markedDifficulty,
@@ -206,90 +207,98 @@ class _ExecutionTerminalState extends State<ExecutionTerminal> {
     );
 
     // Build the widgets for `TerminalWindow`
+    final actionText = controller.isDisplayingQuestion ? strings.executionCheckAnswer : strings.executionCheckQuestion;
+    final actionButton = CustomTextButton(text: actionText.toUpperCase(), onPressed: controller.switchContents);
 
     final contentsLayout = _TerminalContentsLayout(
-      header: header,
-      editor: editor,
+      body: editor,
       bottomFadeTransition: bottomFadeTransition,
       actions: actions,
-      isDisplayingQuestion: controller.isDisplayingQuestion,
+      isActionsVisible: !controller.isDisplayingQuestion,
     );
 
-    final actionText = controller.isDisplayingQuestion ? strings.executionCheckAnswer : strings.executionCheckQuestion;
-    final actionButton = TextButton(
-      style: TextButton.styleFrom(primary: theme.primarySwatch.shade300),
-      onPressed: controller.switchContents,
-      child: Text(actionText.toUpperCase()),
+    final terminalBody = Column(
+      children: [
+        Expanded(child: contentsLayout),
+        Container(height: dimens.executionsTerminalBorderWidth, color: borderColor),
+        actionButton.withSymmetricalPadding(context, vertical: Spacing.large),
+      ],
     );
 
     // Wraps it all under the `_TerminalWindow` root widget
-
-    return _TerminalWindow(
-      contents: contentsLayout,
-      navigationButton: actionButton,
+    return TerminalWindow(
+      body: terminalBody,
       borderColor: borderColor,
+      fadeGradient: fadeGradient,
     ).withAllPadding(context, Spacing.xSmall);
   }
 }
 
-class _TerminalWindow extends StatelessWidget {
-  const _TerminalWindow({required this.contents, required this.navigationButton, required this.borderColor});
+/// Builds an animated `flutter_quill` editor that uses a [FadeTransition] to animate its contents.
+///
+/// The editor is used in read-only mode.
+class _TerminalQuillEditor extends StatelessWidget {
+  const _TerminalQuillEditor({
+    required this.document,
+    required this.animationController,
+    required this.scrollController,
+  });
 
-  final _TerminalContentsLayout contents;
-  final Widget navigationButton;
-  final Color borderColor;
+  final quill.Document document;
+  final AnimationController animationController;
+  final ScrollController scrollController;
 
   @override
   Widget build(BuildContext context) {
-    final buttonDivider = Container(height: dimens.executionsTerminalBorderWidth, color: borderColor);
+    final quillController = quill.QuillController(
+      document: document,
+      selection: const TextSelection.collapsed(offset: 0),
+    );
 
-    return Container(
-      clipBehavior: Clip.hardEdge,
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: dimens.executionsTerminalBorderRadius,
-        border: Border.all(
-          color: borderColor,
-          width: dimens.executionsTerminalBorderWidth,
-        ),
+    final quillEditor = quill.QuillEditor(
+      controller: quillController,
+      focusNode: FocusNode(),
+      scrollController: scrollController,
+      scrollable: true,
+      padding: EdgeInsets.symmetric(
+        vertical: dimens.terminalWindowHeaderHeight,
+        horizontal: context.rawSpacing(Spacing.medium),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Expanded(child: ClipRect(child: contents)),
-          buttonDivider,
-          navigationButton.withSymmetricalPadding(context, vertical: Spacing.small),
-        ],
-      ),
+      autoFocus: false,
+      showCursor: false,
+      readOnly: true,
+      expands: false,
+      enableInteractiveSelection: false,
+    );
+
+    return FadeTransition(
+      opacity: animationController.drive(CurveTween(curve: anims.defaultAnimationCurve)),
+      child: quillEditor,
     );
   }
 }
 
-enum _TerminalElements { header, editor, bottomFadeTransition, actions }
+enum _TerminalElements { body, bottomFadeTransition, actions }
 
 class _TerminalContentsLayout extends StatelessWidget {
   const _TerminalContentsLayout({
-    required this.header,
-    required this.editor,
+    required this.body,
     required this.bottomFadeTransition,
     required this.actions,
-    required this.isDisplayingQuestion,
+    this.isActionsVisible = false,
   });
 
-  final Widget header;
-  final Widget editor;
+  final Widget body;
   final Widget bottomFadeTransition;
   final Widget actions;
-
-  final bool isDisplayingQuestion;
+  final bool isActionsVisible;
 
   @override
   Widget build(BuildContext context) {
     return CustomMultiChildLayout(
-      delegate: _TerminalContentsLayoutDelegate(isActionsVisible: !isDisplayingQuestion),
+      delegate: _TerminalContentsLayoutDelegate(isActionsVisible: isActionsVisible),
       children: <Widget>[
-        LayoutId(id: _TerminalElements.editor, child: editor),
-        LayoutId(id: _TerminalElements.header, child: header),
+        LayoutId(id: _TerminalElements.body, child: body),
         LayoutId(id: _TerminalElements.bottomFadeTransition, child: bottomFadeTransition),
         LayoutId(id: _TerminalElements.actions, child: actions),
       ],
@@ -306,107 +315,23 @@ class _TerminalContentsLayoutDelegate extends MultiChildLayoutDelegate {
   void performLayout(Size size) {
     final looseConstraints = BoxConstraints.loose(size);
 
-    layoutChild(_TerminalElements.header, looseConstraints);
-
     final bottomFadeTransition = layoutChild(_TerminalElements.bottomFadeTransition, looseConstraints);
     final actionsSize = layoutChild(_TerminalElements.actions, looseConstraints);
 
     // If actions are visible, we must subtract its size so contents won't overlap.
-    final editorHeight = size.height - (isActionsVisible ? actionsSize.height : 0);
-    final editor = layoutChild(
-      _TerminalElements.editor,
-      BoxConstraints.tightFor(height: editorHeight, width: size.width),
-    );
+    final bodyHeight = size.height - (isActionsVisible ? actionsSize.height : 0);
+    final body = layoutChild(_TerminalElements.body, BoxConstraints.tightFor(height: bodyHeight, width: size.width));
 
-    // No need to position header and editor because they are placed in `MultiChildLayoutDelegate` default offset (0,0).
-    positionChild(_TerminalElements.bottomFadeTransition, Offset(0, editor.height - bottomFadeTransition.height));
+    // No need to position header and body because they are placed in `MultiChildLayoutDelegate` default offset (0,0).
+    positionChild(_TerminalElements.bottomFadeTransition, Offset(0, body.height - bottomFadeTransition.height));
 
     // We have also to adjust the actions y offset so it won't get clipped if any animation occurs.
-    final actionsOffset = Offset(0, editor.height - (isActionsVisible ? 0 : actionsSize.height));
+    final actionsOffset = Offset(0, body.height - (isActionsVisible ? 0 : actionsSize.height));
     positionChild(_TerminalElements.actions, actionsOffset);
   }
 
   @override
   bool shouldRelayout(_TerminalContentsLayoutDelegate oldDelegate) => oldDelegate.isActionsVisible != isActionsVisible;
-}
-
-class _TerminalHeader extends StatelessWidget {
-  const _TerminalHeader({required this.fadeGradient, required this.borderColor});
-
-  final Color borderColor;
-  final List<Color> fadeGradient;
-  static const _actionsAmount = 3;
-
-  @override
-  Widget build(BuildContext context) {
-    final pseudoActions = List.generate(
-      _actionsAmount,
-      (index) => Container(
-        decoration: BoxDecoration(shape: BoxShape.circle, color: borderColor),
-        height: dimens.executionsTerminalActionDiameter,
-        width: dimens.executionsTerminalActionDiameter,
-      ),
-    );
-
-    return Container(
-      height: dimens.executionsTerminalFadeHeight,
-      decoration: BoxDecoration(
-          borderRadius: dimens.executionsTerminalBorderRadius,
-          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: fadeGradient)),
-      child: Row(
-        children: [
-          for (final pseudoAction in pseudoActions) ...[
-            pseudoAction,
-            context.horizontalBox(Spacing.xxSmall),
-          ]
-        ],
-      ).withOnlyPadding(context, left: Spacing.medium),
-    );
-  }
-}
-
-/// Builds an animated `flutter_quill` editor that uses a [FadeTransition] to animate its contents.
-///
-/// The editor is used in read-only mode.
-class _TerminalQuillEditor extends StatelessWidget {
-  const _TerminalQuillEditor({
-    required this.document,
-    required this.animationController,
-    required this.scrollController,
-  });
-
-  final quill_doc.Document document;
-  final AnimationController animationController;
-  final ScrollController scrollController;
-
-  @override
-  Widget build(BuildContext context) {
-    final quillController = QuillController(
-      document: document,
-      selection: const TextSelection.collapsed(offset: 0),
-    );
-
-    final quillEditor = QuillEditor(
-      controller: quillController,
-      focusNode: FocusNode(),
-      scrollController: scrollController,
-      scrollable: true,
-      padding: EdgeInsets.symmetric(
-        vertical: dimens.executionsTerminalFadeHeight,
-        horizontal: context.rawSpacing(Spacing.medium),
-      ),
-      autoFocus: false,
-      showCursor: false,
-      readOnly: true,
-      expands: false,
-      enableInteractiveSelection: false,
-    );
-
-    return FadeTransition(
-      opacity: animationController.drive(CurveTween(curve: anims.defaultAnimationCurve)),
-      child: quillEditor,
-    );
-  }
 }
 
 class _TerminalActions extends HookWidget {
@@ -431,9 +356,10 @@ class _TerminalActions extends HookWidget {
     final difficultyActions = MemoDifficulty.values.map((difficulty) {
       final isMarkedAnswer = difficulty == markedAnswer;
 
-      final difficultyEmoji = Text(
-        strings.memoDifficultyEmoji(difficulty),
-        style: const TextStyle(fontSize: dimens.executionsTerminalActionEmojiTextSize),
+      final difficultyEmoji = Image.asset(
+        images.memoDifficultyEmoji(difficulty),
+        height: dimens.executionsTerminalActionEmojiSize,
+        width: dimens.executionsTerminalActionEmojiSize,
       );
 
       return GestureDetector(
@@ -477,7 +403,11 @@ class _TerminalActions extends HookWidget {
   }
 
   Widget _buildDifficultyAction(
-      bool isMarkedAnswer, Text difficultyEmoji, Color highlightColor, Color actionBackgroundColor) {
+    bool isMarkedAnswer,
+    Image difficultyEmoji,
+    Color highlightColor,
+    Color actionBackgroundColor,
+  ) {
     final hasMarkedAnswer = markedAnswer != null;
 
     final blurFilter = BackdropFilter(
@@ -488,7 +418,7 @@ class _TerminalActions extends HookWidget {
       child: Container(color: Colors.transparent),
     );
 
-    final highlightDecoration = Container(
+    final highlightDecoration = DecoratedBox(
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         color: Colors.transparent,
